@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Portal Privado - Ecosan</title>
+    <style>
+        * { box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f4f6f9;
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+        }
+        /* Caja del formulario de acceso */
+        #pantalla-login {
+            background: white;
+            padding: 40px 30px;
+            border-radius: 12px;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.1);
+            max-width: 400px;
+            width: 100%;
+            text-align: center;
+        }
+        #pantalla-login h2 { margin-top: 0; color: #2c3e50; }
+        #pantalla-login input {
+            width: 100%;
+            padding: 12px;
+            margin: 15px 0;
+            border: 1px solid #ccc;
+            border-radius: 6px;
+            font-size: 16px;
+            text-align: center;
+        }
+        #pantalla-login button {
+            width: 100%;
+            padding: 12px;
+            background-color: #3498db;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            font-size: 16px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: background 0.2s;
+        }
+        #pantalla-login button:hover { background-color: #2980b9; }
+        #mensaje-estado { color: #e74c3c; margin-top: 10px; font-size: 14px; display: none; }
+
+        /* Contenido oculto que se mostrará al validar el código */
+        #contenido-privado {
+            display: none;
+            background: white;
+            padding: 40px;
+            border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            max-width: 600px;
+            width: 100%;
+            text-align: center;
+        }
+        #contenido-privado h1 { color: #2ecc71; }
+    </style>
+</head>
+<body>
+
+    <!-- FORMULARIO DE LOGEO -->
+    <div id="pantalla-login">
+        <h2>VALIDACIÓN DE CERTIFICADOS</h2>
+        
+        <input type="text" id="codigo-input" placeholder="Ingresa tu código de acceso" autocomplete="off">
+        <button onclick="ValidarCodigo()">VALIDAR</button>
+        <p id="mensaje-estado"></p>
+    </div>
+
+    <!-- CONTENIDO PRIVADO DE LA PÁGINA -->
+    <div id="contenido-privado">
+        <h1>¡CERTIFICADO VÁLIDO! 🌟</h1>
+        <p>Tu certificado ha sido validado exitosamente.</p>
+        <hr style="border: 0; border-top: 1px solid #eee; margin: 20px 0;">
+        <p><em>[Ya puedes diseñar tu página web dentro de este contenedor en VS Code]</em></p>
+    </div>
+
+    <script>
+        // Tu enlace oficial de Google Sheets en formato CSV
+        const ENLACE_CSV = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTxCusB0O36Zlyhx2JOWRLN5a_9pEOu3PFXG_HOZaqcDk00uzmXyWHGvkXsMrjExKfL2Zb8f846lS8b/pub?gid=0&single=true&output=csv";
+        
+        // Proxy público para saltarse el bloqueo CORS del navegador
+        const PROXY_CORS = "https://herokuapp.com";
+
+        async function verificarCodigo() {
+            const inputField = document.getElementById("codigo-input");
+            const estadoText = document.getElementById("mensaje-estado");
+            let intento = inputField.value.trim().toLowerCase();
+
+            if (!intento) {
+                estadoText.innerText = "Por favor, escribe un código.";
+                estadoText.style.color = "#e74c3c";
+                estadoText.style.display = "block";
+                return;
+            }
+
+            estadoText.innerText = "Conectando con la base de datos...";
+            estadoText.style.color = "#7f8c8d";
+            estadoText.style.display = "block";
+
+            try {
+                // Intentamos primero la descarga directa
+                let respuesta = await fetch(ENLACE_CSV, { cache: "no-store" });
+                
+                // Si la descarga directa falla por CORS, usamos el Proxy automáticamente
+                if (!respuesta.ok) {
+                    respuesta = await fetch(PROXY_CORS + ENLACE_CSV);
+                }
+                
+                const textoCsv = await respuesta.text();
+                
+                // Limpiamos los saltos de línea y las comillas del Excel
+                const codigosAutorizados = textoCsv.split(/\r?\n/).map(linea => {
+                    return linea.replace(/"/g, "").trim().toLowerCase();
+                });
+
+                // Validamos si el código que escribió el usuario existe en tu Excel
+                if (codigosAutorizados.includes(intento)) {
+                    document.getElementById("pantalla-login").style.display = "none";
+                    document.getElementById("contenido-privado").style.display = "block";
+                } else {
+                    estadoText.innerText = "Código incorrecto o no autorizado.";
+                    estadoText.style.color = "#e74c3c";
+                }
+
+            } catch (error) {
+                // Alternativa secundaria si el fetch local falla por completo: usar proxy de respaldo
+                try {
+                    const respuestaAlt = await fetch("https://allorigins.win" + encodeURIComponent(ENLACE_CSV));
+                    const jsonAlt = await respuestaAlt.json();
+                    const codigosAutorizados = jsonAlt.contents.split(/\r?\n/).map(linea => {
+                        return linea.replace(/"/g, "").trim().toLowerCase();
+                    });
+                    
+                    if (codigosAutorizados.includes(intento)) {
+                        document.getElementById("pantalla-login").style.display = "none";
+                        document.getElementById("contenido-privado").style.display = "block";
+                        return;
+                    }
+                } catch(e) {}
+                
+                estadoText.innerText = "Error de conexión. Intenta abrir el archivo usando la extensión Live Server de VS Code.";
+                estadoText.style.color = "#e74c3c";
+                console.error(error);
+            }
+        }
+
+        // Permite procesar el formulario presionando la tecla Enter en el teclado
+        document.getElementById("codigo-input").addEventListener("keypress", function(event) {
+            if (event.key === "Enter") {
+                verificarCodigo();
+            }
+        });
+    </script>
+</body>
+</html>
